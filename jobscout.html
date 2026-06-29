@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JobScout – AI Job Matcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+  JOBSCOUT – Standalone AI Job Matching App
+  ============================================================
+  HOW TO EXTEND:
+  1. New location filter  → find "LOCATION FILTERS" in HTML + JS
+  2. New date filter      → find "DATE FILTERS"
+  3. Keyword presets      → find "KEYWORD PRESETS"
+  4. Salary filter        → find "SALARY FILTER"
+  5. AI matching prompt   → find "AI MATCHING PROMPT"
+  6. Job card layout      → find "JOB CARD TEMPLATE"
+  ============================================================ -->
+
+<style>
+/* ── DESIGN TOKENS ─────────────────────────────────────────── */
+:root {
+  --bg:#0d0f12; --surface:#161a20; --surface2:#1e232b; --surface3:#252c36;
+  --border:#2a3140; --border2:#3a4455;
+  --text:#e8edf5; --text2:#8a9ab5; --text3:#5a6880;
+  --accent:#4f8ef7; --accent2:#7cb8ff; --accent-bg:rgba(79,142,247,0.1);
+  --green:#3ecf8e; --green-bg:rgba(62,207,142,0.1);
+  --amber:#f59e0b; --amber-bg:rgba(245,158,11,0.1);
+  --red:#f87171; --red-bg:rgba(248,113,113,0.1);
+  --purple:#a78bfa; --purple-bg:rgba(167,139,250,0.1);
+  --r:10px; --r-sm:6px; --r-lg:14px; --sidebar-w:300px;
+}
+
+/* ── RESET ─────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.6}
+h1,h2,h3{font-family:'DM Serif Display',serif;font-weight:400}
+a{color:var(--accent2)}
+
+/* ── SETUP WIZARD OVERLAY ──────────────────────────────────── */
+#setup-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000;
+  display:flex;align-items:center;justify-content:center;padding:20px;
+}
+#setup-overlay.hidden{display:none}
+.setup-card{
+  background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-lg);
+  max-width:560px;width:100%;padding:32px;
+}
+.setup-card h2{font-size:26px;color:var(--accent2);margin-bottom:6px}
+.setup-card .sub{font-size:14px;color:var(--text2);margin-bottom:28px}
+.setup-steps{display:flex;flex-direction:column;gap:20px}
+.setup-step{display:flex;gap:14px;align-items:flex-start}
+.step-num{
+  width:28px;height:28px;border-radius:50%;background:var(--accent-bg);border:1px solid var(--accent);
+  color:var(--accent2);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;
+}
+.step-body{flex:1}
+.step-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px}
+.step-desc{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:8px}
+.step-desc a{color:var(--accent2)}
+.step-input{position:relative}
+.step-input input{
+  width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--r-sm);padding:8px 36px 8px 12px;font-size:12px;
+  font-family:'DM Mono',monospace;outline:none;transition:border-color .2s;
+}
+.step-input input:focus{border-color:var(--accent)}
+.step-input input.valid{border-color:var(--green)}
+.step-input .eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px}
+.step-tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+.tag-optional{background:var(--amber-bg);color:var(--amber)}
+.tag-required{background:var(--red-bg);color:var(--red)}
+.tag-free{background:var(--green-bg);color:var(--green)}
+.setup-cost{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 16px;font-size:12px;color:var(--text2);line-height:1.8;margin-top:20px}
+.setup-cost strong{color:var(--green)}
+.setup-actions{display:flex;gap:10px;margin-top:24px}
+.btn-primary{flex:1;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:14px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s}
+.btn-primary:hover{background:#3a7ef0}
+.btn-secondary{padding:11px 18px;background:transparent;color:var(--text2);border:1px solid var(--border2);border-radius:var(--r-sm);font-size:14px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s}
+.btn-secondary:hover{color:var(--text);border-color:var(--border2)}
+
+/* ── APP LAYOUT ────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;min-height:100vh}
+.header{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;background:var(--surface);position:sticky;top:0;z-index:10}
+.logo{font-family:'DM Serif Display',serif;font-size:20px;color:var(--accent2);letter-spacing:-.5px}
+.logo span{color:var(--text2);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:300;margin-left:8px}
+.status-pill{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);padding:4px 12px;border-radius:20px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
+.dot.live{background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.header-actions{display:flex;gap:8px}
+.hdr-btn{padding:5px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:var(--r-sm);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
+.hdr-btn:hover{color:var(--text);border-color:var(--border2)}
+
+.main{display:flex;flex:1}
+.sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);border-right:1px solid var(--border);padding:18px;background:var(--surface);display:flex;flex-direction:column;gap:20px;overflow-y:auto;height:calc(100vh - 53px);position:sticky;top:53px}
+.content{flex:1;padding:20px;background:var(--bg);min-height:calc(100vh - 53px)}
+
+/* ── KEY STATUS INDICATOR ──────────────────────────────────── */
+.key-status{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface2);font-size:12px;margin-bottom:4px}
+.key-status.ok{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+.key-status.missing{border-color:var(--border);color:var(--text3)}
+.key-status .ks-icon{font-size:14px}
+.key-status .ks-text{flex:1}
+.key-edit{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif;padding:2px 6px;border-radius:4px}
+.key-edit:hover{color:var(--text2);background:rgba(255,255,255,.05)}
+
+/* ── SIDEBAR COMPONENTS ────────────────────────────────────── */
+.section-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
+hr.divider{border:none;border-top:1px solid var(--border);margin:2px 0}
+
+input[type=text],input[type=password],input[type=number],textarea,select{
+  width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--r-sm);padding:8px 12px;font-size:13px;font-family:'DM Sans',sans-serif;
+  outline:none;transition:border-color .2s;
+}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:90px}
+select option{background:var(--surface2)}
+
+.filter-group{display:flex;flex-direction:column;gap:7px}
+.filter-chip{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;transition:all .15s;background:var(--surface2);font-size:13px;color:var(--text2);user-select:none}
+.filter-chip:hover{border-color:var(--border2);color:var(--text)}
+.filter-chip.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent2)}
+.filter-chip.radio.active{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+.chip-icon{width:16px;height:16px;border-radius:4px;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.filter-chip.active .chip-icon,.filter-chip.radio.active .chip-icon{background:currentColor}
+.chip-check{color:#fff;font-size:9px;font-weight:700;display:none}
+.filter-chip.active .chip-check,.filter-chip.radio.active .chip-check{display:block}
+
+.upload-zone{border:1.5px dashed var(--border2);border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;transition:all .2s;color:var(--text3)}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);color:var(--accent2);background:var(--accent-bg)}
+.upload-zone.uploaded{border-color:var(--green);color:var(--green);background:var(--green-bg);border-style:solid}
+.upload-icon{font-size:20px;margin-bottom:4px}
+
+.search-btn{width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:14px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.search-btn:hover{background:#3a7ef0;transform:translateY(-1px)}
+.search-btn:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;transform:none}
+.spinner{width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.notice{font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;line-height:1.5}
+.notice a{color:var(--accent2)}
+
+/* ── CONTENT AREA ──────────────────────────────────────────── */
+.content-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.result-count{font-size:13px;color:var(--text2)}
+.result-count strong{color:var(--text);font-weight:500}
+.sort-bar{display:flex;gap:5px}
+.sort-btn{padding:5px 12px;background:var(--surface);border:1px solid var(--border);color:var(--text2);border-radius:20px;font-size:12px;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif}
+.sort-btn:hover{border-color:var(--border2);color:var(--text)}
+.sort-btn.active{background:var(--surface2);border-color:var(--border2);color:var(--text)}
+
+/* ── JOB CARDS ─────────────────────────────────────────────── */
+.jobs-grid{display:flex;flex-direction:column;gap:10px}
+.job-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.job-card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.job-card.selected{border-color:var(--accent)}
+.job-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;transition:background .2s;border-radius:3px 0 0 3px}
+.job-card.selected::before{background:var(--accent)}
+.card-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.company-logo{width:38px;height:38px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;color:var(--text2);flex-shrink:0;font-family:'DM Mono',monospace}
+.card-meta{flex:1;min-width:0}
+.job-title{font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.company-name{font-size:12px;color:var(--text2)}
+.match-badge{flex-shrink:0;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;font-family:'DM Mono',monospace}
+.match-high{background:var(--green-bg);color:var(--green)}
+.match-med{background:var(--amber-bg);color:var(--amber)}
+.match-low{background:rgba(90,104,128,.2);color:var(--text3)}
+.card-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.tag{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500}
+.tag-remote{background:var(--green-bg);color:var(--green)}
+.tag-hybrid{background:var(--purple-bg);color:var(--purple)}
+.tag-onsite{background:var(--amber-bg);color:var(--amber)}
+.tag-location{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.tag-new{background:var(--accent-bg);color:var(--accent2)}
+.tag-salary{background:var(--green-bg);color:var(--green)}
+.card-footer{display:flex;align-items:center;justify-content:space-between}
+.posted-date{font-size:11px;color:var(--text3)}
+.apply-btn{padding:4px 12px;background:transparent;border:1px solid var(--border2);color:var(--text2);border-radius:20px;font-size:11px;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif;text-decoration:none;display:inline-block}
+.apply-btn:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ── EMPTY & LOADING ───────────────────────────────────────── */
+.empty-state{text-align:center;padding:56px 20px;color:var(--text3)}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:.4}
+.empty-title{font-family:'DM Serif Display',serif;font-size:20px;color:var(--text2);margin-bottom:6px}
+.empty-sub{font-size:13px;line-height:1.5;max-width:320px;margin:0 auto}
+.skeleton{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:10px}
+.skel-line{height:11px;background:var(--surface2);border-radius:4px;margin-bottom:9px;animation:shimmer 1.5s infinite}
+.skel-line.w60{width:60%}.skel-line.w40{width:40%}.skel-line.w80{width:80%}.skel-line.w30{width:30%}
+@keyframes shimmer{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* ── DETAIL PANEL ──────────────────────────────────────────── */
+.detail-panel{position:fixed;right:0;top:0;bottom:0;width:440px;background:var(--surface);border-left:1px solid var(--border);padding:24px;overflow-y:auto;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:200;display:flex;flex-direction:column;gap:14px}
+.detail-panel.open{transform:translateX(0)}
+.detail-close{position:absolute;top:14px;right:14px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px}
+.detail-close:hover{color:var(--text);border-color:var(--border2)}
+.detail-title{font-size:19px;color:var(--text);margin-bottom:3px;padding-right:36px;line-height:1.3}
+.detail-co{font-size:13px;color:var(--text2);margin-bottom:10px}
+.detail-section h3{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+.detail-section p{font-size:12px;color:var(--text2);line-height:1.7;white-space:pre-wrap;max-height:200px;overflow-y:auto}
+.detail-apply{display:block;text-align:center;padding:9px;background:var(--accent);color:#fff;border-radius:var(--r-sm);font-size:13px;font-weight:500;text-decoration:none;transition:background .2s}
+.detail-apply:hover{background:#3a7ef0}
+.match-reasons{display:flex;flex-direction:column;gap:5px}
+.match-reason{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:var(--text2)}
+.match-reason-dot{width:5px;height:5px;border-radius:50%;background:var(--green);margin-top:5px;flex-shrink:0}
+.progress-wrap{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.progress-bar{height:100%;border-radius:3px;transition:width .6s ease}
+
+/* ── AI STATUS BAR ─────────────────────────────────────────── */
+.ai-status{padding:10px 14px;border-radius:var(--r-sm);font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.ai-status.enabled{background:var(--green-bg);border:1px solid var(--green);color:var(--green)}
+.ai-status.disabled{background:var(--surface2);border:1px solid var(--border);color:var(--text3)}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     SETUP WIZARD OVERLAY
+     ============================================================ -->
+<div id="setup-overlay">
+  <div class="setup-card">
+    <h2>Welcome to JobScout</h2>
+    <p class="sub">Set up your API keys once and the app remembers them. Takes about 2 minutes.</p>
+
+    <div class="setup-steps">
+
+      <!-- Step 1: JSearch -->
+      <div class="setup-step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">JSearch API Key <span class="step-tag tag-required">Required</span> <span class="step-tag tag-free">Free tier available</span></div>
+          <div class="step-desc">
+            Fetches real job listings from across the web.<br>
+            1. Go to <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank">rapidapi.com → JSearch</a><br>
+            2. Sign up for a free RapidAPI account<br>
+            3. Click <strong>Subscribe to Test</strong> → choose <strong>Free plan</strong><br>
+            4. Copy your key from the header section
+          </div>
+          <div class="step-input">
+            <input type="password" id="setup-jkey" placeholder="Paste your RapidAPI key here…" oninput="validateKey('setup-jkey','jkey-ok')">
+            <button class="eye" onclick="toggleVis('setup-jkey',this)">👁</button>
+          </div>
+          <div id="jkey-ok" style="font-size:11px;color:var(--green);margin-top:4px;display:none">✓ Key entered</div>
+        </div>
+      </div>
+
+      <!-- Step 2: Anthropic -->
+      <div class="setup-step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Anthropic API Key <span class="step-tag tag-optional">Optional</span></div>
+          <div class="step-desc">
+            Powers AI resume matching — scores each job 0–100% against your background.<br>
+            1. Go to <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → sign up<br>
+            2. Go to <strong>Settings → API Keys → Create Key</strong><br>
+            3. Add $5 credit at <a href="https://console.anthropic.com/settings/billing" target="_blank">Settings → Billing</a> (~80 searches)<br>
+            4. Paste your <code style="font-family:monospace;font-size:11px;background:var(--surface3);padding:1px 5px;border-radius:3px">sk-ant-...</code> key below<br>
+            <em style="color:var(--text3)">Skip this to still get job results — just without AI scoring.</em>
+          </div>
+          <div class="step-input">
+            <input type="password" id="setup-akey" placeholder="sk-ant-api03-… (optional)" oninput="validateKey('setup-akey','akey-ok')">
+            <button class="eye" onclick="toggleVis('setup-akey',this)">👁</button>
+          </div>
+          <div id="akey-ok" style="font-size:11px;color:var(--green);margin-top:4px;display:none">✓ Key entered — AI matching enabled</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Cost summary -->
+    <div class="setup-cost">
+      💰 <strong>Estimated cost with both keys:</strong><br>
+      JSearch free tier: 200 requests/month = $0<br>
+      Anthropic: ~$0.06 per search run · $5 credit = ~80 searches<br>
+      <strong style="color:var(--accent2)">Total for casual daily use: ~$1–3/month</strong>
+    </div>
+
+    <div class="setup-actions">
+      <button class="btn-secondary" onclick="skipSetup()">Skip setup, use later</button>
+      <button class="btn-primary" onclick="saveSetup()">Save keys &amp; start searching →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MAIN APP
+     ============================================================ -->
+<div class="app">
+  <header class="header">
+    <div class="logo">JobScout <span>AI-powered job matching</span></div>
+    <div class="header-actions">
+      <button class="hdr-btn" onclick="openSetup()">⚙ API Keys</button>
+      <button class="hdr-btn" id="export-hdr-btn" onclick="exportCSV()" style="display:none">⬇ Export CSV</button>
+    </div>
+    <div class="status-pill">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">Ready</span>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- ── SIDEBAR ─────────────────────────────────────────── -->
+    <aside class="sidebar">
+
+      <!-- API key status -->
+      <div>
+        <div class="section-label">API Keys</div>
+        <div id="jkey-status" class="key-status missing">
+          <span class="ks-icon">🔑</span>
+          <span class="ks-text">JSearch key not set</span>
+          <button class="key-edit" onclick="openSetup()">Set up</button>
+        </div>
+        <div id="akey-status" class="key-status missing">
+          <span class="ks-icon">🤖</span>
+          <span class="ks-text">AI matching off</span>
+          <button class="key-edit" onclick="openSetup()">Enable</button>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── LOCATION FILTERS ──────────────────────────────
+           TO ADD A NEW LOCATION:
+           1. Copy a label.filter-chip block below
+           2. Give it a unique onclick key e.g. 'hybrid-ri'
+           3. Add the same key to buildQueries() in the JS
+           ───────────────────────────────────────────────── -->
+      <div>
+        <div class="section-label">Work type &amp; location</div>
+        <div class="filter-group">
+          <label class="filter-chip active" onclick="toggleChip(this,'remote')">
+            <div class="chip-icon"><span class="chip-check">✓</span></div>
+            🌍 Remote — North America
+          </label>
+          <label class="filter-chip active" onclick="toggleChip(this,'hybrid-ma')">
+            <div class="chip-icon"><span class="chip-check">✓</span></div>
+            🏢 Hybrid — Massachusetts
+          </label>
+          <label class="filter-chip active" onclick="toggleChip(this,'hybrid-ct')">
+            <div class="chip-icon"><span class="chip-check">✓</span></div>
+            🏢 Hybrid — Connecticut
+          </label>
+          <!-- ADD NEW LOCATIONS HERE:
+          <label class="filter-chip" onclick="toggleChip(this,'hybrid-ri')">
+            <div class="chip-icon"><span class="chip-check">✓</span></div>
+            🏢 Hybrid — Rhode Island
+          </label>
+          <label class="filter-chip" onclick="toggleChip(this,'hybrid-ny')">
+            <div class="chip-icon"><span class="chip-check">✓</span></div>
+            🏢 Hybrid — New York
+          </label>
+          -->
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── DATE FILTERS ────────────────────────────────── -->
+      <div>
+        <div class="section-label">Posted within</div>
+        <div class="filter-group" id="date-filter-group">
+          <label class="filter-chip radio active" onclick="selectDate(this,'3days')">
+            <div class="chip-icon"><span class="chip-check">✓</span></div>
+            Last 3 days
+          </label>
+          <label class="filter-chip radio" onclick="selectDate(this,'week')">
+            <div class="chip-icon"></div>
+            Last 7 days
+          </label>
+          <label class="filter-chip radio" onclick="selectDate(this,'month')">
+            <div class="chip-icon"></div>
+            Last month
+          </label>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── KEYWORD PRESETS ────────────────────────────── -->
+      <div>
+        <div class="section-label">Job keywords</div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <input type="text" id="keywords" placeholder="e.g. product manager, data engineer…">
+          <select onchange="applyPreset(this.value);this.value=''">
+            <option value="">— quick presets —</option>
+            <!-- ADD MORE PRESETS HERE -->
+            <option value="software engineer">Software Engineer</option>
+            <option value="product manager">Product Manager</option>
+            <option value="data scientist">Data Scientist</option>
+            <option value="UX designer">UX Designer</option>
+            <option value="DevOps engineer">DevOps Engineer</option>
+            <option value="marketing manager">Marketing Manager</option>
+            <option value="project manager">Project Manager</option>
+            <option value="business analyst">Business Analyst</option>
+            <option value="financial analyst">Financial Analyst</option>
+            <option value="sales manager">Sales Manager</option>
+          </select>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ── SALARY FILTER ──────────────────────────────────
+           To enable: uncomment this block, then add
+           &min_salary=${getSalary()} to the URL in fetchJobs()
+           ────────────────────────────────────────────────── -->
+      <!--
+      <div>
+        <div class="section-label">Minimum salary</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="salary-slider" min="0" max="300000" step="10000" value="0"
+            oninput="document.getElementById('salary-out').textContent=this.value>0?'$'+(this.value/1000)+'k':'Any'"
+            style="flex:1">
+          <span id="salary-out" style="font-size:12px;color:var(--text2);min-width:36px">Any</span>
+        </div>
+      </div>
+      <hr class="divider">
+      -->
+
+      <!-- Resume -->
+      <div>
+        <div class="section-label">Your resume</div>
+        <div class="upload-zone" id="upload-zone"
+          onclick="document.getElementById('resume-file').click()"
+          ondrop="handleDrop(event)"
+          ondragover="event.preventDefault();this.classList.add('dragover')"
+          ondragleave="this.classList.remove('dragover')">
+          <div class="upload-icon" id="upload-icon">📄</div>
+          <div id="upload-text" style="font-size:12px;line-height:1.4">Drop PDF/TXT or click to upload<br><small style="opacity:.7">Or paste text below</small></div>
+        </div>
+        <input type="file" id="resume-file" accept=".txt,.pdf,.doc,.docx" style="display:none" onchange="handleFile(this)">
+        <textarea id="resume-text" placeholder="Or paste resume text here…" style="margin-top:8px"></textarea>
+        <div class="notice" style="margin-top:6px" id="ai-notice">
+          💡 Add an Anthropic key (⚙ API Keys) to enable AI job scoring.
+        </div>
+      </div>
+
+      <button class="search-btn" id="search-btn" onclick="runSearch()">
+        <span id="btn-icon">🔍</span>
+        <span id="btn-text">Find matching jobs</span>
+      </button>
+
+    </aside>
+
+    <!-- ── CONTENT ─────────────────────────────────────────── -->
+    <main class="content" id="content">
+      <div class="empty-state">
+        <div class="empty-icon">🎯</div>
+        <div class="empty-title">Find your next role</div>
+        <div class="empty-sub">Set up your API keys using the ⚙ button, paste your resume, choose your filters, and hit search.</div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Detail panel -->
+<div class="detail-panel" id="detail-panel">
+  <button class="detail-close" onclick="closeDetail()">✕</button>
+  <div id="detail-content"></div>
+</div>
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+/* ── STATE ─────────────────────────────────────────────────── */
+const activeFilters = new Set(['remote','hybrid-ma','hybrid-ct']);
+let dateFilter  = '3days';
+let resumeText  = '';
+let currentJobs = [];
+let sortedJobs  = [];
+let sortMode    = 'match';
+let selectedIdx = null;
+
+/* ── SETUP WIZARD ──────────────────────────────────────────── */
+function openSetup(){
+  const jk = localStorage.getItem('js_jkey')||'';
+  const ak = localStorage.getItem('js_akey')||'';
+  document.getElementById('setup-jkey').value = jk;
+  document.getElementById('setup-akey').value = ak;
+  if(jk) showOk('jkey-ok');
+  if(ak) showOk('akey-ok');
+  document.getElementById('setup-overlay').classList.remove('hidden');
+}
+
+function skipSetup(){
+  document.getElementById('setup-overlay').classList.add('hidden');
+}
+
+function saveSetup(){
+  const jk = document.getElementById('setup-jkey').value.trim();
+  const ak = document.getElementById('setup-akey').value.trim();
+  if(!jk){ alert('Please enter your JSearch API key — it is required to fetch jobs.'); return; }
+  localStorage.setItem('js_jkey', jk);
+  if(ak) localStorage.setItem('js_akey', ak);
+  else   localStorage.removeItem('js_akey');
+  document.getElementById('setup-overlay').classList.add('hidden');
+  updateKeyStatus();
+}
+
+function showOk(id){ const el=document.getElementById(id); if(el) el.style.display='block'; }
+function validateKey(inputId, okId){
+  const val = document.getElementById(inputId).value.trim();
+  const ok  = document.getElementById(okId);
+  if(ok) ok.style.display = val.length > 10 ? 'block' : 'none';
+}
+
+function updateKeyStatus(){
+  const jk = localStorage.getItem('js_jkey')||'';
+  const ak = localStorage.getItem('js_akey')||'';
+
+  const jStatus = document.getElementById('jkey-status');
+  if(jk){
+    jStatus.className='key-status ok';
+    jStatus.innerHTML=`<span class="ks-icon">✅</span><span class="ks-text">JSearch key set</span><button class="key-edit" onclick="openSetup()">Change</button>`;
+  } else {
+    jStatus.className='key-status missing';
+    jStatus.innerHTML=`<span class="ks-icon">🔑</span><span class="ks-text">JSearch key not set</span><button class="key-edit" onclick="openSetup()">Set up</button>`;
+  }
+
+  const aStatus = document.getElementById('akey-status');
+  const notice  = document.getElementById('ai-notice');
+  if(ak){
+    aStatus.className='key-status ok';
+    aStatus.innerHTML=`<span class="ks-icon">🤖</span><span class="ks-text">AI matching enabled</span><button class="key-edit" onclick="openSetup()">Change</button>`;
+    if(notice) notice.style.display='none';
+  } else {
+    aStatus.className='key-status missing';
+    aStatus.innerHTML=`<span class="ks-icon">🤖</span><span class="ks-text">AI matching off</span><button class="key-edit" onclick="openSetup()">Enable</button>`;
+    if(notice) notice.style.display='';
+  }
+}
+
+/* ── TOGGLE KEY VISIBILITY ─────────────────────────────────── */
+function toggleVis(id, btn){
+  const el = document.getElementById(id);
+  el.type  = el.type==='password' ? 'text' : 'password';
+  btn.textContent = el.type==='password' ? '👁' : '🙈';
+}
+
+/* ── FILTER LOGIC ──────────────────────────────────────────── */
+function toggleChip(el, key){
+  el.classList.toggle('active');
+  activeFilters.has(key) ? activeFilters.delete(key) : activeFilters.add(key);
+}
+function selectDate(el, val){
+  dateFilter = val;
+  document.querySelectorAll('#date-filter-group .filter-chip').forEach(e=>{
+    e.classList.remove('active');
+    e.querySelector('.chip-icon').innerHTML='';
+  });
+  el.classList.add('active');
+  el.querySelector('.chip-icon').innerHTML='<span class="chip-check">✓</span>';
+}
+function applyPreset(val){ if(val) document.getElementById('keywords').value=val; }
+
+/* ── RESUME UPLOAD ─────────────────────────────────────────── */
+function handleFile(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    resumeText = e.target.result;
+    document.getElementById('upload-zone').classList.add('uploaded');
+    document.getElementById('upload-icon').textContent='✅';
+    document.getElementById('upload-text').textContent=file.name;
+    document.getElementById('resume-text').value=resumeText.slice(0,3000);
+  };
+  reader.readAsText(file);
+}
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if(file){ document.getElementById('resume-file').files=e.dataTransfer.files; handleFile(document.getElementById('resume-file')); }
+}
+
+/* ── STATUS ────────────────────────────────────────────────── */
+function setStatus(text, live){
+  document.getElementById('status-text').textContent=text;
+  document.getElementById('status-dot').className='dot'+(live?' live':'');
+}
+
+/* ── BUILD SEARCH QUERIES ──────────────────────────────────────
+   TO ADD A NEW LOCATION:
+   1. Add chip in HTML sidebar
+   2. Add matching entry here with same key string
+   ─────────────────────────────────────────────────────────── */
+function buildQueries(){
+  const kw = document.getElementById('keywords').value.trim() || 'software engineer';
+  const queryMap = {
+    'remote':    { q:`${kw} remote`,               loc:'United States' },
+    'hybrid-ma': { q:`${kw} hybrid Massachusetts`,  loc:'Massachusetts' },
+    'hybrid-ct': { q:`${kw} hybrid Connecticut`,    loc:'Connecticut' },
+    // ADD NEW LOCATIONS HERE:
+    // 'hybrid-ri': { q:`${kw} hybrid Rhode Island`,   loc:'Rhode Island' },
+    // 'hybrid-ny': { q:`${kw} hybrid New York`,       loc:'New York' },
+    // 'hybrid-nh': { q:`${kw} hybrid New Hampshire`,  loc:'New Hampshire' },
+  };
+  return Object.entries(queryMap).filter(([k])=>activeFilters.has(k)).map(([,v])=>v);
+}
+
+/* ── JSEARCH API ───────────────────────────────────────────── */
+async function fetchJobs(apiKey, query, location){
+  const url = [
+    'https://jsearch.p.rapidapi.com/search',
+    `?query=${encodeURIComponent(query+' in '+location)}`,
+    `&date_posted=${dateFilter}`,
+    `&num_pages=2`,
+    `&country=us`
+  ].join('');
+  const resp = await fetch(url,{headers:{'x-rapidapi-host':'jsearch.p.rapidapi.com','x-rapidapi-key':apiKey}});
+  if(!resp.ok){ const b=await resp.text(); throw new Error(`JSearch ${resp.status}: ${b.slice(0,120)}`); }
+  const data = await resp.json();
+  return data.data||[];
+}
+
+/* ── AI MATCHING PROMPT ────────────────────────────────────────
+   Edit the prompt below to change scoring criteria.
+   Threshold to show jobs: score >= 30 (change in runSearch)
+   ─────────────────────────────────────────────────────────── */
+async function matchWithClaude(anthropicKey, jobs, resume){
+  const jobList = jobs.slice(0,20).map((j,i)=>
+    `[${i}] ${j.job_title} at ${j.employer_name}\n${(j.job_description||'').slice(0,400)}`
+  ).join('\n\n');
+
+  const prompt = `You are a precise job matching assistant.
+Score each job 0-100 against the candidate's resume. Return ONLY a JSON array, no markdown:
+[{"index":0,"score":85,"reasons":["5+ yrs React matches req","Led teams of 10+","Fintech background relevant"]}]
+
+Scoring: 80-100=strong match, 60-79=good match, 40-59=partial, 0-39=poor.
+
+Resume:
+${resume.slice(0,2500)}
+
+Jobs:
+${jobList}`;
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':anthropicKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})
+  });
+  if(!resp.ok){ const b=await resp.text(); throw new Error(`Anthropic ${resp.status}: ${b.slice(0,120)}`); }
+  const data = await resp.json();
+  const text = data.content[0].text.replace(/```json|```/g,'').trim();
+  return JSON.parse(text);
+}
+
+/* ── MAIN SEARCH ───────────────────────────────────────────── */
+async function runSearch(){
+  const jk     = localStorage.getItem('js_jkey')||'';
+  const ak     = localStorage.getItem('js_akey')||'';
+  const resume = resumeText || document.getElementById('resume-text').value.trim();
+
+  if(!jk){ openSetup(); return; }
+  if(!activeFilters.size){ alert('Select at least one location filter.'); return; }
+
+  const btn = document.getElementById('search-btn');
+  btn.disabled=true;
+  document.getElementById('btn-icon').innerHTML='<div class="spinner"></div>';
+  document.getElementById('btn-text').textContent='Searching…';
+  document.getElementById('export-hdr-btn').style.display='none';
+  setStatus('Fetching jobs…',true);
+  showLoading(); selectedIdx=null;
+
+  try{
+    /* Step 1: Fetch jobs */
+    const queries=buildQueries();
+    const all=[]; const seen=new Set();
+    for(const q of queries){
+      setStatus(`Searching ${q.loc}…`,true);
+      const jobs=await fetchJobs(jk,q.q,q.loc);
+      for(const j of jobs){ if(!seen.has(j.job_id)){ seen.add(j.job_id); all.push({...j,matchScore:null,matchReasons:[]}); } }
+    }
+
+    if(!all.length){
+      showEmpty('No jobs found','Try different keywords, a broader date range, or check your API key.');
+      return;
+    }
+
+    /* Step 2: AI matching (optional) */
+    if(ak && resume){
+      setStatus(`AI matching ${all.length} jobs…`,true);
+      try{
+        const scores=await matchWithClaude(ak,all,resume);
+        for(const s of scores){ if(all[s.index]){ all[s.index].matchScore=s.score; all[s.index].matchReasons=s.reasons||[]; } }
+        currentJobs=all.filter(j=>j.matchScore===null||j.matchScore>=30);
+      }catch(e){ console.warn('AI match failed:',e); currentJobs=all; }
+    } else {
+      currentJobs=all;
+    }
+
+    setStatus(`${currentJobs.length} jobs found`,false);
+    renderJobs(currentJobs);
+    document.getElementById('export-hdr-btn').style.display='';
+
+  }catch(e){
+    setStatus('Error',false);
+    showEmpty('Something went wrong',e.message);
+  }finally{
+    btn.disabled=false;
+    document.getElementById('btn-icon').textContent='🔍';
+    document.getElementById('btn-text').textContent='Find matching jobs';
+  }
+}
+
+/* ── RENDER HELPERS ────────────────────────────────────────── */
+function showLoading(){
+  document.getElementById('content').innerHTML=[1,2,3,4].map(()=>`
+    <div class="skeleton">
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <div style="width:38px;height:38px;border-radius:8px;background:var(--surface2);flex-shrink:0;animation:shimmer 1.5s infinite"></div>
+        <div style="flex:1"><div class="skel-line w60"></div><div class="skel-line w40"></div></div>
+      </div>
+      <div class="skel-line w80"></div><div class="skel-line w30"></div>
+    </div>`).join('');
+}
+function showEmpty(title,sub){
+  document.getElementById('content').innerHTML=`<div class="empty-state"><div class="empty-icon">😔</div><div class="empty-title">${title}</div><div class="empty-sub">${sub}</div></div>`;
+}
+
+/* ── SORTING ───────────────────────────────────────────────── */
+function sortJobs(jobs){
+  if(sortMode==='match') return [...jobs].sort((a,b)=>(b.matchScore||0)-(a.matchScore||0));
+  if(sortMode==='date')  return [...jobs].sort((a,b)=>(b.job_posted_at_timestamp||0)-(a.job_posted_at_timestamp||0));
+  return [...jobs];
+}
+function setSort(m){ sortMode=m; renderJobs(currentJobs); }
+
+/* ── JOB CARD TEMPLATE ─────────────────────────────────────────
+   Edit this function to change what appears on job cards.
+   Available fields on each job object:
+   job_title, employer_name, job_city, job_state,
+   job_description, job_min_salary, job_max_salary,
+   job_posted_at, job_apply_link, work_arrangement,
+   matchScore, matchReasons, job_employment_type
+   ─────────────────────────────────────────────────────────── */
+function getWorkType(job){
+  const s=((job.work_arrangement||'')+(job.job_title||'')+(job.job_description||'')).toLowerCase();
+  if(s.includes('remote')) return 'remote';
+  if(s.includes('hybrid')) return 'hybrid';
+  return 'onsite';
+}
+function getInitials(name){ return (name||'??').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'??'; }
+function matchClass(s){ return s>=75?'match-high':s>=50?'match-med':'match-low'; }
+
+function renderJobs(jobs){
+  sortedJobs=sortJobs(jobs);
+  document.getElementById('content').innerHTML=`
+    <div class="content-header">
+      <div class="result-count"><strong>${sortedJobs.length}</strong> jobs matched</div>
+      <div class="sort-bar">
+        <button class="sort-btn ${sortMode==='match'?'active':''}" onclick="setSort('match')">Best match</button>
+        <button class="sort-btn ${sortMode==='date'?'active':''}" onclick="setSort('date')">Newest first</button>
+      </div>
+    </div>
+    <div class="jobs-grid">
+      ${sortedJobs.map((job,i)=>{
+        const wt=getWorkType(job);
+        const sc=job.matchScore;
+        const postedAt=job.job_posted_at||'Recently';
+        const isNew=/hour|today|1 day/.test(postedAt);
+        const hasSal=job.job_min_salary&&job.job_max_salary;
+        return `<div class="job-card${selectedIdx===i?' selected':''}" id="card-${i}" onclick="openDetail(${i},this)">
+          <div class="card-top">
+            <div class="company-logo">${getInitials(job.employer_name)}</div>
+            <div class="card-meta">
+              <div class="job-title" title="${job.job_title}">${job.job_title}</div>
+              <div class="company-name">${job.employer_name}</div>
+            </div>
+            ${sc!==null?`<div class="match-badge ${matchClass(sc)}">${sc}%</div>`:''}
+          </div>
+          <div class="card-tags">
+            ${wt==='remote'?'<span class="tag tag-remote">🌍 Remote</span>':wt==='hybrid'?'<span class="tag tag-hybrid">🏢 Hybrid</span>':'<span class="tag tag-onsite">🏛 Onsite</span>'}
+            <span class="tag tag-location">📍 ${[job.job_city,job.job_state].filter(Boolean).join(', ')||'N/A'}</span>
+            ${isNew?'<span class="tag tag-new">✨ New</span>':''}
+            ${hasSal?`<span class="tag tag-salary">💰 $${Math.round(job.job_min_salary/1000)}k–$${Math.round(job.job_max_salary/1000)}k</span>`:''}
+          </div>
+          <div class="card-footer">
+            <span class="posted-date">Posted ${postedAt}</span>
+            ${job.job_apply_link?`<a class="apply-btn" href="${job.job_apply_link}" target="_blank" onclick="event.stopPropagation()">Apply ↗</a>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+/* ── DETAIL PANEL ──────────────────────────────────────────── */
+function openDetail(i, cardEl){
+  document.querySelectorAll('.job-card').forEach(c=>c.classList.remove('selected'));
+  cardEl.classList.add('selected');
+  selectedIdx=i;
+  const job=sortedJobs[i];
+  const sc=job.matchScore;
+  const barColor=sc>=75?'var(--green)':sc>=50?'var(--amber)':'var(--text3)';
+  document.getElementById('detail-content').innerHTML=`
+    <h2 class="detail-title">${job.job_title}</h2>
+    <div class="detail-co">${job.employer_name} · ${[job.job_city,job.job_state].filter(Boolean).join(', ')||'N/A'}</div>
+    ${sc!==null?`
+      <div class="detail-section">
+        <h3>Resume match</h3>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div class="progress-wrap"><div class="progress-bar" style="width:${sc}%;background:${barColor}"></div></div>
+          <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:${barColor}">${sc}%</span>
+        </div>
+        ${job.matchReasons.length?`<div class="match-reasons">${job.matchReasons.map(r=>`<div class="match-reason"><div class="match-reason-dot"></div><span>${r}</span></div>`).join('')}</div>`:''}
+      </div>`:''}
+    <div class="detail-section">
+      <h3>Details</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;font-size:12px">
+        <div style="background:var(--surface2);padding:8px 10px;border-radius:6px"><div style="color:var(--text3);margin-bottom:2px">Type</div><div style="color:var(--text)">${job.job_employment_type||'Full-time'}</div></div>
+        <div style="background:var(--surface2);padding:8px 10px;border-radius:6px"><div style="color:var(--text3);margin-bottom:2px">Posted</div><div style="color:var(--text)">${job.job_posted_at||'Recently'}</div></div>
+        ${job.job_min_salary?`<div style="background:var(--surface2);padding:8px 10px;border-radius:6px;grid-column:span 2"><div style="color:var(--text3);margin-bottom:2px">Salary</div><div style="color:var(--green)">$${Math.round(job.job_min_salary/1000)}k – $${Math.round(job.job_max_salary/1000)}k/yr</div></div>`:''}
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Description</h3>
+      <p>${(job.job_description||'No description available.').slice(0,900)}${(job.job_description||'').length>900?'…':''}</p>
+    </div>
+    ${job.job_apply_link?`<a class="detail-apply" href="${job.job_apply_link}" target="_blank">Apply now ↗</a>`:''}`;
+  document.getElementById('detail-panel').classList.add('open');
+}
+function closeDetail(){ document.getElementById('detail-panel').classList.remove('open'); document.querySelectorAll('.job-card').forEach(c=>c.classList.remove('selected')); selectedIdx=null; }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDetail(); });
+
+/* ── EXPORT CSV ────────────────────────────────────────────── */
+function exportCSV(){
+  if(!sortedJobs.length) return;
+  const headers=['Title','Company','Location','Work Type','Match Score','Posted','Salary Min','Salary Max','Apply Link'];
+  const rows=sortedJobs.map(j=>[
+    j.job_title, j.employer_name,
+    [j.job_city,j.job_state].filter(Boolean).join(', '),
+    getWorkType(j),
+    j.matchScore!==null?j.matchScore+'%':'N/A',
+    j.job_posted_at||'', j.job_min_salary||'', j.job_max_salary||'',
+    j.job_apply_link||''
+  ]);
+  const csv=[headers,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`jobscout-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ── INIT ──────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded',()=>{
+  updateKeyStatus();
+  const jk = localStorage.getItem('js_jkey')||'';
+  if(!jk){
+    document.getElementById('setup-overlay').classList.remove('hidden');
+  } else {
+    document.getElementById('setup-overlay').classList.add('hidden');
+  }
+});
+</script>
+</body>
+</html>
