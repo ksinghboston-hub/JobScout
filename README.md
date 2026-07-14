@@ -79,9 +79,7 @@ Pay-as-you-go	—	Unlimited	$0.005 per request
 
 For casual daily use:  The Free tier (200 requests/month) is sufficient for testing. For regular daily searching, the Pro plan at $25/month covers ~10,000 requests — far more than needed. Each search run uses 2–3 requests (one per location filter).
 
-
-
-
+\
 5.2  Anthropic API Pricing
 
 Cost type	Rate	Per search run
